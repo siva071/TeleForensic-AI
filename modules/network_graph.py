@@ -115,3 +115,7 @@ def build_graph(df, scores):
     except Exception as e:
         print(f"Error building network graph: {e}")
         return None
+
+print("Caller col:", caller_col)
+print("Receiver col:", receiver_col)
+print("Call freq len:", len(call_frequencies))
