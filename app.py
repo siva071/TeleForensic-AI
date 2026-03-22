@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import streamlit.components.v1 as components
+
 from datetime import datetime
 from modules.data_loader import (
   load_excel, clean_dataframe, 
