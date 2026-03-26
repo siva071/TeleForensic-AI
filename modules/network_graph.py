@@ -2,10 +2,12 @@ def build_graph(df, scores):
     """Build network graph from call data"""
     try:
         from pyvis.network import Network
+        import os
 
-        print("==== DEBUG START ====")
+        print("===== DEBUG START =====")
+        print("DF Empty:", df.empty)
+        print("DF Shape:", df.shape)
         print("Columns:", df.columns)
-        print("Total Rows:", len(df))
         print(df.head())
 
         # -------------------------------
@@ -37,7 +39,7 @@ def build_graph(df, scores):
             num = str(num)
             digits = ''.join(filter(str.isdigit, num))
 
-            if len(digits) >= 5:   # relaxed condition
+            if len(digits) >= 5:
                 return digits[-10:] if len(digits) >= 10 else digits
 
             return None
@@ -55,10 +57,22 @@ def build_graph(df, scores):
                 pair = (caller, receiver)
                 call_frequencies[pair] = call_frequencies.get(pair, 0) + 1
 
+        # 🔥 FALLBACK (CRITICAL FIX)
+        if not call_frequencies:
+            print("⚠️ No cleaned data, using raw fallback")
+
+            for _, row in df.iterrows():
+                caller = str(row[caller_col])
+                receiver = str(row[receiver_col])
+
+                if caller and receiver:
+                    pair = (caller, receiver)
+                    call_frequencies[pair] = call_frequencies.get(pair, 0) + 1
+
         print("Total Connections:", len(call_frequencies))
 
         if not call_frequencies:
-            print("❌ No valid call data found")
+            print("❌ Still no data → cannot build graph")
             return None
 
         # -------------------------------
@@ -73,12 +87,14 @@ def build_graph(df, scores):
         )
 
         # -------------------------------
-        # STEP 5: SCORE LOOKUP
+        # STEP 5: SCORE LOOKUP SAFE
         # -------------------------------
         score_lookup = {}
-        if scores:
+
+        if isinstance(scores, list):
             for s in scores:
-                score_lookup[s.get('number')] = s
+                if isinstance(s, dict) and 'number' in s:
+                    score_lookup[s['number']] = s
 
         # -------------------------------
         # STEP 6: ADD NODES
@@ -97,7 +113,6 @@ def build_graph(df, scores):
             score_data = score_lookup.get(number, {})
 
             color = score_data.get('color', '#00ffcc')
-
             size = min(10 + freq * 2, 50)
 
             net.add_node(
@@ -138,9 +153,13 @@ def build_graph(df, scores):
         # -------------------------------
         net.save_graph("network.html")
 
-        print("✅ Graph generated successfully")
+        print("✅ Graph generated")
 
-        return "network.html"
+        # Ensure file exists
+        if os.path.exists("network.html"):
+            return "network.html"
+        else:
+            return None
 
     except Exception as e:
         print("❌ ERROR:", e)
