@@ -1,32 +1,69 @@
 def build_graph(df, scores):
     """Build network graph from call data"""
     try:
-        # Find caller and receiver columns
+        from pyvis.network import Network
+
+        print("==== DEBUG START ====")
+        print("Columns:", df.columns)
+        print("Total Rows:", len(df))
+        print(df.head())
+
+        # -------------------------------
+        # STEP 1: FORCE COLUMN DETECTION
+        # -------------------------------
         caller_col = None
         receiver_col = None
 
         for col in df.columns:
-            col_lower = col.lower().strip()
+            col_clean = col.lower().strip()
 
-            if caller_col is None and any(keyword in col_lower for keyword in 
-                ['caller', 'from', 'calling', 'dial', 'a party', 'a_number', 'source']):
+            if 'a' in col_clean and 'party' in col_clean:
                 caller_col = col
-
-            elif receiver_col is None and any(keyword in col_lower for keyword in 
-                ['receiver', 'to', 'called', 'receive', 'b party', 'b_number', 'destination']):
+            elif 'b' in col_clean and 'party' in col_clean:
                 receiver_col = col
 
-        print("Caller:", caller_col)
-        print("Receiver:", receiver_col)
-
+        # Fallback (VERY IMPORTANT)
         if not caller_col or not receiver_col:
-            print("Could not find caller and receiver columns")
+            caller_col = df.columns[0]
+            receiver_col = df.columns[1]
+
+        print("Caller Column:", caller_col)
+        print("Receiver Column:", receiver_col)
+
+        # -------------------------------
+        # STEP 2: CLEAN NUMBER FUNCTION
+        # -------------------------------
+        def clean_number(num):
+            num = str(num)
+            digits = ''.join(filter(str.isdigit, num))
+
+            if len(digits) >= 5:   # relaxed condition
+                return digits[-10:] if len(digits) >= 10 else digits
+
             return None
 
-        # Import libraries
-        from pyvis.network import Network
+        # -------------------------------
+        # STEP 3: BUILD FREQUENCY MAP
+        # -------------------------------
+        call_frequencies = {}
 
-        # Create network
+        for _, row in df.iterrows():
+            caller = clean_number(row[caller_col])
+            receiver = clean_number(row[receiver_col])
+
+            if caller and receiver:
+                pair = (caller, receiver)
+                call_frequencies[pair] = call_frequencies.get(pair, 0) + 1
+
+        print("Total Connections:", len(call_frequencies))
+
+        if not call_frequencies:
+            print("❌ No valid call data found")
+            return None
+
+        # -------------------------------
+        # STEP 4: CREATE NETWORK
+        # -------------------------------
         net = Network(
             height='600px',
             width='100%',
@@ -35,78 +72,56 @@ def build_graph(df, scores):
             directed=True
         )
 
-        # Score lookup
+        # -------------------------------
+        # STEP 5: SCORE LOOKUP
+        # -------------------------------
         score_lookup = {}
         if scores:
-            for score_data in scores:
-                score_lookup[score_data['number']] = score_data
+            for s in scores:
+                score_lookup[s.get('number')] = s
 
-        # Clean number function
-        def clean_number(num):
-            num = str(num)
-            digits = ''.join(filter(str.isdigit, num))
-            if len(digits) >= 10:
-                return digits[-10:]
-            return None
-
-        # Count frequencies
-        call_frequencies = {}
-
-        for _, row in df.iterrows():
-            caller_clean = clean_number(row[caller_col])
-            receiver_clean = clean_number(row[receiver_col])
-
-            if caller_clean and receiver_clean:
-                pair = (caller_clean, receiver_clean)
-                call_frequencies[pair] = call_frequencies.get(pair, 0) + 1
-
-        if not call_frequencies:
-            print("No valid call data found")
-            return None
-
-        # Collect all numbers
+        # -------------------------------
+        # STEP 6: ADD NODES
+        # -------------------------------
         all_numbers = set()
-        for caller, receiver in call_frequencies.keys():
-            all_numbers.add(caller)
-            all_numbers.add(receiver)
+        for c, r in call_frequencies.keys():
+            all_numbers.add(c)
+            all_numbers.add(r)
 
-        # Add nodes
         for number in all_numbers:
-            score_data = score_lookup.get(number, {
-                'score': 0,
-                'label': 'Unknown',
-                'color': '#888888'
-            })
-
-            frequency = sum(
-                freq for (c, r), freq in call_frequencies.items()
+            freq = sum(
+                v for (c, r), v in call_frequencies.items()
                 if c == number or r == number
             )
 
-            size = min(10 + frequency * 2, 50)
-            color = score_data.get('color', '#888888')
+            score_data = score_lookup.get(number, {})
+
+            color = score_data.get('color', '#00ffcc')
+
+            size = min(10 + freq * 2, 50)
 
             net.add_node(
                 number,
-                label=f"{number}\n({score_data.get('label', 'Unknown')})",
-                color=color,
+                label=number,
                 size=size,
-                title=f"Number: {number}\nScore: {score_data.get('score', 0)}\nCalls: {frequency}"
+                color=color,
+                title=f"Number: {number}\nCalls: {freq}"
             )
 
-        # Add edges
-        for (caller, receiver), frequency in call_frequencies.items():
-            width = min(1 + frequency / 5, 10)
-
+        # -------------------------------
+        # STEP 7: ADD EDGES
+        # -------------------------------
+        for (c, r), freq in call_frequencies.items():
             net.add_edge(
-                caller,
-                receiver,
-                width=width,
-                title=f"Calls: {frequency}",
-                color='#ffffff'
+                c,
+                r,
+                value=freq,
+                title=f"Calls: {freq}"
             )
 
-        # Physics config
+        # -------------------------------
+        # STEP 8: SETTINGS
+        # -------------------------------
         net.set_options("""
         var options = {
           "physics": {
@@ -118,11 +133,15 @@ def build_graph(df, scores):
         }
         """)
 
-        # Save graph
-        net.save_graph('network.html')
+        # -------------------------------
+        # STEP 9: SAVE GRAPH
+        # -------------------------------
+        net.save_graph("network.html")
 
-        return 'network.html'
+        print("✅ Graph generated successfully")
+
+        return "network.html"
 
     except Exception as e:
-        print("Error building network graph:", e)
+        print("❌ ERROR:", e)
         return None
