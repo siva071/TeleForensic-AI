@@ -5,12 +5,16 @@ def build_graph(df, scores):
         caller_col = None
         receiver_col = None
         
-        for col in df.columns:
-            col_lower = col.lower()
-            if caller_col is None and any(keyword in col_lower for keyword in ['caller', 'from', 'calling', 'dial']):
-                caller_col = col
-            elif receiver_col is None and any(keyword in col_lower for keyword in ['receiver', 'to', 'called', 'receive']):
-                receiver_col = col
+      for col in df.columns:
+    col_lower = col.lower().strip()
+
+    if caller_col is None and any(keyword in col_lower for keyword in 
+        ['caller', 'from', 'calling', 'dial', 'a party', 'a_number', 'source']):
+        caller_col = col
+
+    elif receiver_col is None and any(keyword in col_lower for keyword in 
+        ['receiver', 'to', 'called', 'receive', 'b party', 'b_number', 'destination']):
+        receiver_col = col
         
         if not caller_col or not receiver_col:
             print("Could not find caller and receiver columns")
