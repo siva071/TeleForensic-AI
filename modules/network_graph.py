@@ -1,16 +1,42 @@
-def build_graph(df, scores):
-    from pyvis.network import Network
+# -------------------------------
+# ADD NODES WITH REAL RISK COLORS
+# -------------------------------
+for number in all_numbers:
 
-    net = Network(height='600px', width='100%', directed=True)
+    freq = sum(
+        v for (c, r), v in call_frequencies.items()
+        if c == number or r == number
+    )
 
-    # STATIC TEST GRAPH (no CSV dependency)
-    net.add_node("A", label="Number A")
-    net.add_node("B", label="Number B")
-    net.add_node("C", label="Number C")
+    score_data = score_lookup.get(number, {})
 
-    net.add_edge("A", "B")
-    net.add_edge("B", "C")
+    # Default values
+    label_text = "Unknown"
+    color = "#888888"
 
-    net.save_graph("network.html")
+    if score_data:
+        label = score_data.get("label", "").lower()
 
-    return "network.html"
+        if label == "high":
+            color = "red"
+            label_text = "HIGH RISK"
+        elif label == "medium":
+            color = "orange"
+            label_text = "MEDIUM"
+        elif label == "low":
+            color = "green"
+            label_text = "LOW"
+
+    size = min(10 + freq * 3, 60)
+
+    net.add_node(
+        number,
+        label=f"{number}",
+        size=size,
+        color=color,
+        title=f"""
+Number: {number}
+Risk: {label_text}
+Total Calls: {freq}
+"""
+    )
